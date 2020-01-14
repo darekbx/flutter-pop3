@@ -8,7 +8,8 @@ part 'src/SocketCommunication.dart';
 class Pop3Client {
 
   list() async {
-    await SocketCommunication().connect();
-
+    var stream = await SocketCommunication("pop3.poczta.onet.pl", 110)
+        .connect() as Stream<String>;
+    return stream;
   }
 }
