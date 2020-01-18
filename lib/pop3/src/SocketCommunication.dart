@@ -2,7 +2,10 @@ part of pop3client;
 
 class SocketCommunication {
 
-  SocketCommunication(this.address, this.port);
+  SocketCommunication(this.address, this.port) {
+    _errorStreamController = StreamController<String>();
+    _dataStreamController = StreamController<String>();
+  }
 
   String address;
   num port;
@@ -10,13 +13,28 @@ class SocketCommunication {
   Socket _socket;
 
   StreamController<String> _dataStreamController;
+  StreamController<String> _errorStreamController;
 
-  connect() async {
-    _socket = await Socket.connect(address, port);
-    _socket.listen(_onSocketData, onError: _onSocketError, onDone: _onSocketDone);
+  Stream get dataStream => _dataStreamController.stream;
+  Stream get errorStream => _errorStreamController.stream;
 
-    _dataStreamController = StreamController<String>();
-    return _dataStreamController.stream;
+  var onReady = () => { };
+
+  connect() {
+    Socket.connect(address, port).then((socket) {
+      _socket = socket;
+      onReady();
+      socket.listen(
+          _onSocketData,
+          onError: _onSocketError,
+          onDone: _onSocketDone
+      );
+    });
+  }
+
+  write(String data) async {
+    var encodedData = utf8.encode(data);
+    _socket.add(encodedData);
   }
 
   close() {
@@ -24,16 +42,16 @@ class SocketCommunication {
   }
 
   _onSocketData(data) {
-    var decodedData = String.fromCharCodes(data);
+    var decodedData = utf8.decode(data);
     _dataStreamController.add(decodedData);
   }
 
   _onSocketError(error, StackTrace trac) {
+    _errorStreamController.add(error);
     print(error);
   }
 
   _onSocketDone() {
-    print("Done");
     _socket.destroy();
   }
 }

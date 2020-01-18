@@ -2,12 +2,32 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_mail/pop3/pop3client.dart';
 
+import 'dart:async';
+
 void main() {
   test('POP3 Connect test', () async {
-      final pop3 = Pop3Client();
+    final pop3 = Pop3Client("pop3.poczta.onet.pl", 110);
 
-      var stream = await pop3.list() as Stream<String>;
+    var readyCompleter = Completer();
+    var statusCompleter = Completer();
 
-      stream.listen(expectAsync1((data) { expect(data.trim(), "+OK Onet server ready."); }));
+    pop3.onReady = () {
+      readyCompleter.complete();
+    };
+
+    pop3.initialize();
+
+    pop3.onStatus = (status) {
+      if (status == State.SERVER_READY) {
+        statusCompleter.complete();
+      } else {
+        fail("Wrong status $status");
+      }
+    };
+
+    pop3.connect();
+
+    await readyCompleter.future;
+    await statusCompleter.future;
   });
 }
