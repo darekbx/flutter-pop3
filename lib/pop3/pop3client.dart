@@ -7,15 +7,14 @@ import 'dart:convert';
 part 'src/SocketCommunication.dart';
 
 enum State {
-  SERVER_READY,
-  AUTHENTICATED,
-  AUTHENTICATION_ERROR,
-  ERROR
+  ERROR,
+  IDLE
 }
 
 enum Mode {
   CONNECTION,
   AUTENTICATION,
+  STATE,
   LIST
 }
 
@@ -23,17 +22,20 @@ class Pop3Client {
 
   Pop3Client(this.address, this.port);
 
+  final bool DISPLAY_LOGS = true;
+
   String address;
   num port;
 
   SocketCommunication _socketCommunication;
+  var _commandQueue = List<String>();
   Mode _mode;
 
   Stream get errorStream => _socketCommunication.errorStream;
   Stream get dataStream => _socketCommunication.dataStream;
 
   var onReady = () => { };
-  var onStatus = (State) => { };
+  var onStatus = (State, Mode) => { };
 
   initialize() {
     _socketCommunication = SocketCommunication(address, port);
@@ -48,41 +50,47 @@ class Pop3Client {
 
   authenticate(String username, String password) {
     _mode = Mode.AUTENTICATION;
-    _socketCommunication.write("USER $username\n");
-    _socketCommunication.write("PASS $password\n");
+    _commandQueue
+      ..add("USER $username")
+      ..add("PASS $password");
+    _execute();
+  }
+
+  stat() async {
+    _mode = Mode.STATE;
+    _commandQueue.add("STAT");
+    _execute();
   }
 
   list() async {
+    _mode = Mode.STATE;
+    _commandQueue.add("LIST");
+    _execute();
+  }
 
+  _execute() {
+    if (_commandQueue.isNotEmpty) {
+      var command = _commandQueue.removeAt(0);
+      _log("Write: ${command.trim()} ");
+      _socketCommunication.write("$command\n");
+    } else {
+      onStatus(State.IDLE, _mode);
+    }
   }
 
   _handleData(String data) {
-    switch(_mode) {
-      case Mode.CONNECTION:
-        _handleConnection(data);
-        break;
-      case Mode.AUTENTICATION:
-        _handleAuthentication(data);
-        break;
-      case Mode.LIST:
+    _log("Data: $data");
 
-        break;
+    if (data[0] == "+") {
+      _execute();
+    } else {
+      onStatus(State.ERROR, _mode);
     }
   }
 
-  _handleConnection(data) {
-    if (data[0] == "+") {
-      onStatus(State.SERVER_READY);
-    } else {
-      onStatus(State.ERROR);
-    }
-  }
-
-  _handleAuthentication(data) {
-    if (data[0] == "+") {
-      onStatus(State.AUTHENTICATED);
-    } else {
-      onStatus(State.AUTHENTICATION_ERROR);
+  _log(String message) {
+    if (DISPLAY_LOGS) {
+      print(message);
     }
   }
 }
